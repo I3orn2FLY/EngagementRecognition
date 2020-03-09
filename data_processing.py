@@ -143,7 +143,7 @@ def generate_split(df, cols, session_ids, child_ids):
                 df_s = df.loc[np.logical_and(df["childID"] == ch_id, df["sessionID"] == sess_id)][cols]
                 x, y = get_XY_by_df(df_s)
                 X += x
-                y += y
+                Y += y
 
     X = np.array(X)
     Y = np.array(Y).astype(np.int8)
