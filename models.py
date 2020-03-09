@@ -30,6 +30,12 @@ class BiLSTM(nn.Module):
         return x
 
 
+class FeatExtractCNN():
+    def __init__(self):
+        pass
+        # self.densenet = self.
+
+
 class SalakhNet(nn.Module):
     def __init__(self, nb_class, input_size=FEAT_NUM):
         super(SalakhNet, self).__init__()

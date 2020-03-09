@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import glob
 from config import *
 
 np.random.seed(0)
@@ -94,33 +95,55 @@ def get_columns():
 
     cols.append("engagement")
 
+    if use_CNN:
+        cols.append("filename")
+
     return cols
 
 
-def generate_split(df, cols, session_ids, child_ids):
+def get_XY_by_df(df_s):
     X = []
     Y = []
-    for idx, ch_id in enumerate(child_ids):
 
-        for sess_id in session_ids:
-            df_s = df.loc[np.logical_and(df["childID"] == ch_id, df["sessionID"] == sess_id)][cols]
-            df_s.sort_values(by=['frameID'], inplace=True)
-            video = df_s.values[:, 1:]
-            n = video.shape[0] // SEQ_LENGTH
+    if use_CNN:
+        for i in range(df_s.shape[0]):
+            X.append(df_s.iloc[i].filename)
+            Y.append(df_s.iloc[i].engagement)
+    else:
+        df_s.sort_values(by=['frameID'], inplace=True)
+        video = df_s.values[:, 1:]
+        n = video.shape[0] // SEQ_LENGTH
 
-            for i in range(n):
-                if SEQ_LENGTH > 1:
-                    seq = video[i * SEQ_LENGTH: (i + 1) * SEQ_LENGTH]
-                    x = seq[:, :-1]
-                    targets = seq[:, -1].astype(np.int8)
-                    (values, counts) = np.unique(targets, return_counts=True)
-                    y = values[np.argmax(counts)]
-                else:
-                    x = video[i, :-1]
-                    y = video[i, -1]
+        for i in range(n):
+            if SEQ_LENGTH > 1:
+                seq = video[i * SEQ_LENGTH: (i + 1) * SEQ_LENGTH]
+                x = seq[:, :-1]
+                targets = seq[:, -1].astype(np.int8)
+                (values, counts) = np.unique(targets, return_counts=True)
+                y = values[np.argmax(counts)]
+            else:
+                x = video[i, :-1]
+                y = video[i, -1]
 
-                X.append(x)
-                Y.append(y)
+            X.append(x)
+            Y.append(y)
+
+    return X, Y
+
+
+def generate_split(df, cols, session_ids, child_ids):
+    if SPLIT_METHOD == "RANDOM":
+        df_s = df[cols]
+        X, Y = get_XY_by_df(df_s)
+    else:
+        X = []
+        Y = []
+        for ch_id in child_ids:
+            for sess_id in session_ids:
+                df_s = df.loc[np.logical_and(df["childID"] == ch_id, df["sessionID"] == sess_id)][cols]
+                x, y = get_XY_by_df(df_s)
+                X += x
+                y += y
 
     X = np.array(X)
     Y = np.array(Y).astype(np.int8)
@@ -188,46 +211,53 @@ def generateXY(data_path=CSV_FILE):
         save_XY(X_test, Y_test, suffix="test")
 
 
+def add_filenames(in_csv_file, out_csv_file):
+    df = pd.read_csv(os.sep.join([CSV_DIR, in_csv_file]))
+
+    df.dropna(inplace=True)
+    df.childID = df.childID.astype(np.int8)
+    df.sessionID = df.sessionID.astype(np.int8)
+    df.frameID = df.frameID.astype(np.int32)
+    df.engagement = df.engagement.astype(np.int8)
+
+    if "filename" not in df.columns:
+
+        image_file_table = {}
+
+        ls = glob.glob(os.sep.join([IMAGES_DIR, "**", "*.jpg"]), recursive=True)
+        for image_file in ls:
+            image_file = os.sep.join(image_file.split(os.sep)[-2:])
+            folder, image_name = image_file.split(os.sep)
+            child_id, session_id = folder.split("_")
+            child_id = int(child_id[1:])
+            session_id = int(session_id[1:])
+
+            image_name = os.path.splitext(image_name)[0]
+            frame_id = int(image_name.split("_")[4])
+
+            key = (child_id, session_id, frame_id)
+
+            image_file_table[key] = image_file
+
+        filenames = []
+        rms = 0
+        for i in range(df.shape[0]):
+            i = i - rms
+            row = df.iloc[i]
+            key = (int(row.childID), int(row.sessionID), int(row.frameID))
+            if key not in image_file_table:
+                df.drop(df.index[i], inplace=True)
+                rms += 1
+            else:
+                filenames.append(image_file_table[key])
+
+        df["filename"] = filenames
+
+    print(df.head())
+    df.to_csv(os.sep.join([CSV_DIR, out_csv_file]), index=None)
+
+
 if __name__ == "__main__":
+    # add_filenames("28_with_filenames.csv", "28_with_filenames.csv")
     generateXY()
     X_tr, y_tr, X_val, y_val, X_test, y_test = load_data()
-
-    # crit1 = "childID"
-    # crit2 = "sessionID"
-    # 
-    # if SPLIT_METHOD == "SESSION":
-    #     crit1, crit2 = crit2, crit1
-    # 
-    # crit_lists = {"childID": child_ids, "sessionID": session_ids}
-    # 
-    # for idx, val1 in enumerate(crit_lists[crit1]):
-    #     if idx == int(0.8 * len(crit_lists[crit1])):
-    #         save_XY(X, Y, suffix="train")
-    # 
-    #         X, Y = X_val, Y_val
-    # 
-    #     if idx == int(0.9 * len(crit_lists[crit1])):
-    #         save_XY(X, Y, suffix="val")
-    #         X, Y = X_test, Y_test
-    # 
-    #     for val2 in crit_lists[crit2]:
-    #         df_s = df.loc[np.logical_and(df[crit1] == val1, df[crit2] == val2)][cols]
-    #         df_s.sort_values(by=['frameID'], inplace=True)
-    #         video = df_s.values[:, 1:]
-    #         n = video.shape[0] // SEQ_LENGTH
-    # 
-    #         for i in range(n):
-    #             if SEQ_LENGTH > 1:
-    #                 seq = video[i * SEQ_LENGTH: (i + 1) * SEQ_LENGTH]
-    #                 x = seq[:, :-1]
-    #                 targets = seq[:, -1].astype(np.int8)
-    #                 (values, counts) = np.unique(targets, return_counts=True)
-    #                 y = values[np.argmax(counts)]
-    #             else:
-    #                 x = video[i, :-1]
-    #                 y = video[i, -1]
-    # 
-    #             X.append(x)
-    #             Y.append(y)
-    # 
-    # save_XY(X, Y, suffix="test")
