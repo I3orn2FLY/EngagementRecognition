@@ -30,10 +30,29 @@ class BiLSTM(nn.Module):
         return x
 
 
-class FeatExtractCNN():
+class FeatExtractCNN(nn.Module):
     def __init__(self):
-        pass
-        # self.densenet = self.
+        super(FeatExtractCNN, self).__init__()
+        self.fe = models.densenet121(pretrained=True)
+        self.fe.classifier = nn.Identity()
+
+    def forward(self, X):
+        return self.fe(X)
+
+
+class CustomCNN(nn.Module):
+    def __init__(self):
+        super(CustomCNN, self).__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(),
+            nn.ReLU(),
+            nn.BatchNorm2d(),
+            nn.Conv2d(),
+            nn.ReLU(),
+            nn.Conv2d(),
+            nn.ReLU(),
+            nn.Conv2d(),
+        )
 
 
 class SalakhNet(nn.Module):

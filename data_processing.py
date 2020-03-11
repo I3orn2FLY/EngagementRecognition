@@ -1,6 +1,11 @@
 import pandas as pd
 import numpy as np
 import glob
+import torch
+import time
+from models import FeatExtractCNN
+from PIL import Image
+from torchvision import transforms
 from config import *
 
 np.random.seed(0)
@@ -12,12 +17,15 @@ def save_XY(X, Y, suffix, shuffle=True):
         np.random.shuffle(idxs)
         X, Y = X[idxs], Y[idxs]
 
-    print(suffix, "shapes:", X.shape, Y.shape)
-    suffix_ = SPLIT_METHOD + "_" + str(SEQ_LENGTH) + "_" + str(FEAT_NUM) + "_" + suffix
+    if use_CNN:
+        suffix_ = SPLIT_METHOD + "_CNN_" + suffix
+    else:
+        suffix_ = SPLIT_METHOD + "_" + str(SEQ_LENGTH) + "_" + str(FEAT_NUM) + "_" + suffix
     np.save(os.path.join(VARS_DIR, "X_" + suffix_), X)
     np.save(os.path.join(VARS_DIR, "Y_" + suffix_), Y)
 
-    if suffix == "train":
+    print(suffix, "shapes:", X.shape, Y.shape, "saved as", suffix_)
+    if suffix == "train" and not use_CNN:
         X = X.reshape(-1, FEAT_NUM)
         mean_x = np.mean(X, axis=0)
         std_x = np.std(X, axis=0)
@@ -25,8 +33,11 @@ def save_XY(X, Y, suffix, shuffle=True):
         np.save(os.path.join(VARS_DIR, "X_" + str(FEAT_NUM) + "_std"), std_x)
 
 
-def load_data():
-    between = SPLIT_METHOD + "_" + str(SEQ_LENGTH) + "_" + str(FEAT_NUM)
+def load_data(cnn=use_CNN):
+    if cnn:
+        between = SPLIT_METHOD + "_CNN"
+    else:
+        between = SPLIT_METHOD + "_" + str(SEQ_LENGTH) + "_" + str(FEAT_NUM)
     X_tr = np.load(os.path.join(VARS_DIR, "X_" + between + "_train.npy"))
     y_tr = np.load(os.path.join(VARS_DIR, "Y_" + between + "_train.npy"))
     X_val = np.load(os.path.join(VARS_DIR, "X_" + between + "_val.npy"))
@@ -39,6 +50,65 @@ def load_data():
     print(X_test.shape, y_test.shape)
 
     return X_tr, y_tr, X_val, y_val, X_test, y_test
+
+
+def show(start_time, cur_idx, step, L):
+    cur_idx += 1
+
+    time_left = int((time.time() - start_time) * 1.0 / cur_idx * (L - cur_idx))
+
+    hours = time_left // 3600
+
+    minutes = time_left % 3600 // 60
+
+    seconds = time_left % 60
+
+    print("\rProgress: %.2f" % (cur_idx * 100 / L) + "% " \
+          + str(hours) + " hours " \
+          + str(minutes) + " minutes " \
+          + str(seconds) + " seconds left",
+          end=" ")
+
+
+def gen_CNN_feats_split(split, X_paths, model, batch_size):
+    feats = []
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    start_time = time.time()
+    print("Generating", split, "split")
+    s = 0
+    while s < len(X_paths):
+        e = min(len(X_paths), s + batch_size)
+        paths_batch = X_paths[s:e]
+        X_batch = []
+        for img_path in paths_batch:
+            img_path = os.sep.join([IMAGES_DIR, img_path])
+            X_batch.append(preprocess(Image.open(img_path)))
+
+        inp = torch.stack(X_batch).to(DEVICE)
+        out = model(inp).cpu().numpy()
+        feats.append(out)
+        show(start_time, s, batch_size, len(X_paths))
+        s += batch_size
+
+    print()
+    feats = np.concatenate(feats)
+    np.save(os.path.sep.join([VARS_DIR, "X_" + SPLIT_METHOD + "_CNN_features_" + split + ".npy", feats]))
+    return feats
+
+
+def gen_CNN_feats(batch_size=256):
+    model = FeatExtractCNN().to(DEVICE)
+    model.eval()
+    X_tr, _, X_val, _, X_test, _ = load_data(cnn=True)
+    with torch.no_grad():
+        gen_CNN_feats_split("train", X_tr, model, batch_size)
+        gen_CNN_feats_split("val", X_val, model, batch_size)
+        gen_CNN_feats_split("test", X_test, model, batch_size)
 
 
 def normalize(X):
@@ -152,6 +222,10 @@ def generate_split(df, cols, session_ids, child_ids):
 
 
 def generateXY(data_path=CSV_FILE):
+    print("Generating Data.")
+    print("Split method:", SPLIT_METHOD)
+    print("Sequence Length:", SEQ_LENGTH)
+    print("Model path/name:", MODEL_PATH)
     df = pd.read_csv(data_path)
     child_ids = df.childID.unique()
     session_ids = df.sessionID.unique()
@@ -259,5 +333,6 @@ def add_filenames(in_csv_file, out_csv_file):
 
 if __name__ == "__main__":
     # add_filenames("28_with_filenames.csv", "28_with_filenames.csv")
-    generateXY()
-    X_tr, y_tr, X_val, y_val, X_test, y_test = load_data()
+    # generateXY()
+    # X_tr, y_tr, X_val, y_val, X_test, y_test = load_data()
+    gen_CNN_feats()

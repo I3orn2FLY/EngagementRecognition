@@ -1,36 +1,34 @@
 import pandas as pd
 import cv2
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 from config import *
-from PIL import Image
+
 import torchvision.models as models
 
-class CNNDataset(Dataset):
-    def __init__(self, input_csv):
-        self.preprocess = transforms.Compose([
-            transforms.Resize((256, 128)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
 
-        self.df = pd.read_csv(input_csv)
+class CNNDataset(Dataset):
+    def __init__(self, split):
+        between = SPLIT_METHOD + "_CNN"
+
+        self.X = np.load(os.path.join(VARS_DIR, "X_" + between + "_" + split + ".npy"))
+        self.Y = np.load(os.path.join(VARS_DIR, "Y_" + between + "_" + split + ".npy"))
 
     def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-        img_file = os.sep.join(
-            [IMAGES_DIR, 'c' + str(int(row.childID)) + '_s' + str(int(row.sessionID)), str(int(row.frameID)) + ".jpg"])
+        img = cv2.resize(cv2.imread(os.sep.join([IMAGES_DIR, self.X[idx]])))
 
-        label = int(row.engagement)
-        img = Image.open(img_file)
 
-        img_t = self.preprocess(img)
+        img_t = np.transpose(img, [2, 0, 1])
+
+        label = self.Y[idx]
 
         return (img_t, label)
 
     def __len__(self):
         return self.df.shape[0]
+
 
 def image_statistics():
     df = pd.read_csv(os.sep.join([CSV_DIR, "28_with_filenames.csv"]))
@@ -46,9 +44,14 @@ def image_statistics():
 
     print(shape)
 
+
 if __name__ == "__main__":
     image_statistics()
-    # dataset = CNNDataset(os.sep.join([CSV_DIR, "labels.csv"]))
+    # dataset = CNNDataset("train")
+    #
+    # for i in range(5):
+    #     img_t, label = dataset[i]
+    #     print(img_t.shape)
     #
     # model = models.densenet121(pretrained=True).features
     #
@@ -61,4 +64,3 @@ if __name__ == "__main__":
     #
     #
     #     break
-
