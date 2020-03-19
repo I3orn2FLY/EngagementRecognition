@@ -33,11 +33,30 @@ def save_XY(X, Y, suffix, shuffle=True):
         np.save(os.path.join(VARS_DIR, "X_" + str(FEAT_NUM) + "_std"), std_x)
 
 
+def load_cnn_data():
+    between_y = SPLIT_METHOD + "_CNN"
+    between_x = SPLIT_METHOD + "_CNN_features"
+
+    X_tr = np.load(os.path.join(VARS_DIR, "X_" + between_x + "_train.npy"))
+    Y_tr = np.load(os.path.join(VARS_DIR, "Y_" + between_y + "_train.npy"))
+    X_val = np.load(os.path.join(VARS_DIR, "X_" + between_x + "_val.npy"))
+    Y_val = np.load(os.path.join(VARS_DIR, "Y_" + between_y + "_val.npy"))
+    X_test = np.load(os.path.join(VARS_DIR, "X_" + between_x + "_test.npy"))
+    Y_test = np.load(os.path.join(VARS_DIR, "Y_" + between_y + "_test.npy"))
+
+    print(X_tr.shape, Y_tr.shape)
+    print(X_val.shape, Y_val.shape)
+    print(X_test.shape, Y_test.shape)
+
+    return X_tr, Y_tr, X_val, Y_val, X_test, Y_test
+
+
 def load_data(cnn=use_CNN):
     if cnn:
         between = SPLIT_METHOD + "_CNN"
     else:
         between = SPLIT_METHOD + "_" + str(SEQ_LENGTH) + "_" + str(FEAT_NUM)
+
     X_tr = np.load(os.path.join(VARS_DIR, "X_" + between + "_train.npy"))
     y_tr = np.load(os.path.join(VARS_DIR, "Y_" + between + "_train.npy"))
     X_val = np.load(os.path.join(VARS_DIR, "X_" + between + "_val.npy"))
@@ -97,11 +116,11 @@ def gen_CNN_feats_split(split, X_paths, model, batch_size):
 
     print()
     feats = np.concatenate(feats)
-    np.save(os.path.sep.join([VARS_DIR, "X_" + SPLIT_METHOD + "_CNN_features_" + split + ".npy", feats]))
+    np.save(os.path.sep.join([VARS_DIR, "X_" + SPLIT_METHOD + "_CNN_features_" + split + ".npy"]), feats)
     return feats
 
 
-def gen_CNN_feats(batch_size=256):
+def gen_CNN_feats(batch_size=CNN_FEAT_EXTRACT_BATCHSIZE):
     model = FeatExtractCNN().to(DEVICE)
     model.eval()
     X_tr, _, X_val, _, X_test, _ = load_data(cnn=True)
@@ -333,6 +352,6 @@ def add_filenames(in_csv_file, out_csv_file):
 
 if __name__ == "__main__":
     # add_filenames("28_with_filenames.csv", "28_with_filenames.csv")
-    # generateXY()
-    # X_tr, y_tr, X_val, y_val, X_test, y_test = load_data()
-    gen_CNN_feats()
+    generateXY()
+    if use_CNN:
+        gen_CNN_feats()

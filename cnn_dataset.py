@@ -11,16 +11,12 @@ import torchvision.models as models
 
 class CNNDataset(Dataset):
     def __init__(self, split):
-        between = SPLIT_METHOD + "_CNN"
-
-        self.X = np.load(os.path.join(VARS_DIR, "X_" + between + "_" + split + ".npy"))
-        self.Y = np.load(os.path.join(VARS_DIR, "Y_" + between + "_" + split + ".npy"))
+        self.X = os.path.sep.join([VARS_DIR, "X_" + SPLIT_METHOD + "_CNN_features_" + split + ".npy"])
+        self.Y = os.path.sep.join([VARS_DIR, "Y_" + SPLIT_METHOD + "_CNN_" + split + ".npy"])
 
     def __getitem__(self, idx):
-        img = cv2.resize(cv2.imread(os.sep.join([IMAGES_DIR, self.X[idx]])))
+        feat = np.load(self.X[idx])
 
-
-        img_t = np.transpose(img, [2, 0, 1])
 
         label = self.Y[idx]
 

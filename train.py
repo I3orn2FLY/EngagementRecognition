@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 import math
 from models import BiLSTM, SalakhNet
-from data_processing import load_data, generateXY, normalize
+from data_processing import load_data, load_cnn_data, generateXY, normalize
 from config import *
 
 
@@ -58,13 +58,16 @@ def train(model, X_tr, Y_tr, X_val, Y_val, X_test, Y_test, n_epochs):
 
 
 if __name__ == "__main__":
-    try:
-        X_tr, Y_tr, X_val, Y_val, X_test, Y_test = load_data()
-    except:
-        generateXY()
-        X_tr, Y_tr, X_val, Y_val, X_test, Y_test = load_data()
+    if use_CNN:
+        X_tr, Y_tr, X_val, Y_val, X_test, Y_test = load_cnn_data()
+    else:
+        try:
+            X_tr, Y_tr, X_val, Y_val, X_test, Y_test = load_data()
+        except:
+            generateXY()
+            X_tr, Y_tr, X_val, Y_val, X_test, Y_test = load_data()
 
-    X_tr, X_val, X_test = normalize([X_tr, X_val, X_test])
+        X_tr, X_val, X_test = normalize([X_tr, X_val, X_test])
     device = torch.device("cuda:0")
     if SEQ_LENGTH > 1:
         model = BiLSTM(256).to(device)

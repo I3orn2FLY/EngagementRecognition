@@ -64,7 +64,7 @@ class SalakhNet(nn.Module):
         # self.fc4 = nn.Linear(2000, nb_class)
         #
         self.net = nn.Sequential(
-            nn.Linear(FEAT_NUM, 500),
+            nn.Linear(input_size, 500),
             nn.ReLU(),
             nn.Linear(500, 500),
             nn.ReLU(),
