@@ -11,64 +11,39 @@ from config import *
 np.random.seed(0)
 
 
-def save_XY(X, Y, suffix, shuffle=True):
+def save_XY(X, Y, split, shuffle=True):
     if shuffle:
         idxs = list(range(len(Y)))
         np.random.shuffle(idxs)
         X, Y = X[idxs], Y[idxs]
 
-    if use_CNN:
-        suffix_ = SPLIT_METHOD + "_CNN_" + suffix
-    else:
-        suffix_ = SPLIT_METHOD + "_" + str(SEQ_LENGTH) + "_" + str(FEAT_NUM) + "_" + suffix
-    np.save(os.path.join(VARS_DIR, "X_" + suffix_), X)
-    np.save(os.path.join(VARS_DIR, "Y_" + suffix_), Y)
+    between_name = get_between_name(SPLIT_METHOD, SEQ_LENGTH, FEAT_MODEL, FEAT_NUM)
+    np.save(os.path.join(VARS_DIR, "X_" + between_name + "_" + split), X)
+    np.save(os.path.join(VARS_DIR, "Y_" + between_name + "_" + split), Y)
 
-    print(suffix, "shapes:", X.shape, Y.shape, "saved as", suffix_)
-    if suffix == "train" and not use_CNN:
+    print(split, "shapes:", X.shape, Y.shape, "between_name:", between_name)
+    if split == "train":
         X = X.reshape(-1, FEAT_NUM)
         mean_x = np.mean(X, axis=0)
         std_x = np.std(X, axis=0)
-        np.save(os.path.join(VARS_DIR, "X_" + str(FEAT_NUM) + "_mean"), mean_x)
-        np.save(os.path.join(VARS_DIR, "X_" + str(FEAT_NUM) + "_std"), std_x)
+        np.save(os.path.join(VARS_DIR, "X_" + between_name + "_mean"), mean_x)
+        np.save(os.path.join(VARS_DIR, "X_" + between_name + "_std"), std_x)
 
 
-def load_cnn_data():
-    between_y = SPLIT_METHOD + "_CNN"
-    between_x = SPLIT_METHOD + "_CNN_features"
-
-    X_tr = np.load(os.path.join(VARS_DIR, "X_" + between_x + "_train.npy"))
-    Y_tr = np.load(os.path.join(VARS_DIR, "Y_" + between_y + "_train.npy"))
-    X_val = np.load(os.path.join(VARS_DIR, "X_" + between_x + "_val.npy"))
-    Y_val = np.load(os.path.join(VARS_DIR, "Y_" + between_y + "_val.npy"))
-    X_test = np.load(os.path.join(VARS_DIR, "X_" + between_x + "_test.npy"))
-    Y_test = np.load(os.path.join(VARS_DIR, "Y_" + between_y + "_test.npy"))
+def load_data():
+    between_name = get_between_name(SPLIT_METHOD, SEQ_LENGTH, FEAT_MODEL, FEAT_NUM)
+    X_tr = np.load(os.path.join(VARS_DIR, "X_" + between_name + "_train.npy"))
+    Y_tr = np.load(os.path.join(VARS_DIR, "Y_" + between_name + "_train.npy"))
+    X_val = np.load(os.path.join(VARS_DIR, "X_" + between_name + "_val.npy"))
+    Y_val = np.load(os.path.join(VARS_DIR, "Y_" + between_name + "_val.npy"))
+    X_test = np.load(os.path.join(VARS_DIR, "X_" + between_name + "_test.npy"))
+    Y_test = np.load(os.path.join(VARS_DIR, "Y_" + between_name + "_test.npy"))
 
     print(X_tr.shape, Y_tr.shape)
     print(X_val.shape, Y_val.shape)
     print(X_test.shape, Y_test.shape)
 
     return X_tr, Y_tr, X_val, Y_val, X_test, Y_test
-
-
-def load_data(cnn=use_CNN):
-    if cnn:
-        between = SPLIT_METHOD + "_CNN"
-    else:
-        between = SPLIT_METHOD + "_" + str(SEQ_LENGTH) + "_" + str(FEAT_NUM)
-
-    X_tr = np.load(os.path.join(VARS_DIR, "X_" + between + "_train.npy"))
-    y_tr = np.load(os.path.join(VARS_DIR, "Y_" + between + "_train.npy"))
-    X_val = np.load(os.path.join(VARS_DIR, "X_" + between + "_val.npy"))
-    y_val = np.load(os.path.join(VARS_DIR, "Y_" + between + "_val.npy"))
-    X_test = np.load(os.path.join(VARS_DIR, "X_" + between + "_test.npy"))
-    y_test = np.load(os.path.join(VARS_DIR, "Y_" + between + "_test.npy"))
-
-    print(X_tr.shape, y_tr.shape)
-    print(X_val.shape, y_val.shape)
-    print(X_test.shape, y_test.shape)
-
-    return X_tr, y_tr, X_val, y_val, X_test, y_test
 
 
 def show(start_time, cur_idx, step, L):
@@ -89,103 +64,53 @@ def show(start_time, cur_idx, step, L):
           end=" ")
 
 
-def gen_CNN_feats_split(split, X_paths, model, batch_size):
-    feats = []
-    preprocess = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    start_time = time.time()
-    print("Generating", split, "split")
-    s = 0
-    while s < len(X_paths):
-        e = min(len(X_paths), s + batch_size)
-        paths_batch = X_paths[s:e]
-        X_batch = []
-        for img_path in paths_batch:
-            img_path = os.sep.join([IMAGES_DIR, img_path])
-            X_batch.append(preprocess(Image.open(img_path)))
 
-        inp = torch.stack(X_batch).to(DEVICE)
-        out = model(inp).cpu().numpy()
-        feats.append(out)
-        show(start_time, s, batch_size, len(X_paths))
-        s += batch_size
-
-    print()
-    feats = np.concatenate(feats)
-    np.save(os.path.sep.join([VARS_DIR, "X_" + SPLIT_METHOD + "_CNN_features_" + split + ".npy"]), feats)
-    return feats
-
-
-def gen_CNN_feats(batch_size=CNN_FEAT_EXTRACT_BATCHSIZE):
-    model = FeatExtractCNN().to(DEVICE)
-    model.eval()
-    X_tr, _, X_val, _, X_test, _ = load_data(cnn=True)
-    with torch.no_grad():
-        gen_CNN_feats_split("train", X_tr, model, batch_size)
-        gen_CNN_feats_split("val", X_val, model, batch_size)
-        gen_CNN_feats_split("test", X_test, model, batch_size)
-
-
-def normalize(X):
-    mean_x = np.load(os.path.join(VARS_DIR, "X_" + str(FEAT_NUM) + "_mean.npy"))
-    std_x = np.load(os.path.join(VARS_DIR, "X_" + str(FEAT_NUM) + "_std.npy"))
-
-    if isinstance(X, list):
-        X_norm = []
-        for x in X:
-            X_norm.append((x - mean_x) / std_x)
-
-        return X_norm
-
-    return (X - mean_x) / std_x
 
 
 def get_columns():
     cols = ["frameID"]
-    with_body = False
-    with_face = False
-    with_hands = False
-    if FEAT_NUM == 411:
-        with_body = True
-        with_face = True
-        with_hands = True
-    elif FEAT_NUM == 201:
-        with_body = True
-        with_hands = True
-    elif FEAT_NUM == 210:
-        with_face = True
 
-    if with_body:
-        for i in range(25):
-            cols.append("poseX" + str(i))
-            cols.append("poseY" + str(i))
-            cols.append("poseC" + str(i))
+    if FEAT_MODEL == "pose":
+        with_body = False
+        with_face = False
+        with_hands = False
+        if FEAT_NUM == 411:
+            with_body = True
+            with_face = True
+            with_hands = True
+        elif FEAT_NUM == 201:
+            with_body = True
+            with_hands = True
+        elif FEAT_NUM == 210:
+            with_face = True
 
-    if with_hands:
-        for i in range(21):
-            cols.append("handLeftX" + str(i))
-            cols.append("handLeftY" + str(i))
-            cols.append("handLeftC" + str(i))
+        if with_body:
+            for i in range(25):
+                cols.append("poseX" + str(i))
+                cols.append("poseY" + str(i))
+                cols.append("poseC" + str(i))
 
-        for i in range(21):
-            cols.append("handRightX" + str(i))
-            cols.append("handRightY" + str(i))
-            cols.append("handRightC" + str(i))
+        if with_hands:
+            for i in range(21):
+                cols.append("handLeftX" + str(i))
+                cols.append("handLeftY" + str(i))
+                cols.append("handLeftC" + str(i))
 
-    if with_face:
-        for i in range(70):
-            cols.append("faceX" + str(i))
-            cols.append("faceY" + str(i))
-            cols.append("faceC" + str(i))
+            for i in range(21):
+                cols.append("handRightX" + str(i))
+                cols.append("handRightY" + str(i))
+                cols.append("handRightC" + str(i))
+
+        if with_face:
+            for i in range(70):
+                cols.append("faceX" + str(i))
+                cols.append("faceY" + str(i))
+                cols.append("faceC" + str(i))
+
+    elif FEAT_MODEL == "densenet121":
+        cols.append("filename")
 
     cols.append("engagement")
-
-    if use_CNN:
-        cols.append("filename")
 
     return cols
 
@@ -194,28 +119,39 @@ def get_XY_by_df(df_s):
     X = []
     Y = []
 
-    if use_CNN:
-        for i in range(df_s.shape[0]):
-            X.append(df_s.iloc[i].filename)
-            Y.append(df_s.iloc[i].engagement)
-    else:
-        df_s.sort_values(by=['frameID'], inplace=True)
-        video = df_s.values[:, 1:]
-        n = video.shape[0] // SEQ_LENGTH
+    df_s.sort_values(by=['frameID'], inplace=True)
+    video = df_s.values[:, 1:]
+    n = video.shape[0] // SEQ_LENGTH
 
-        for i in range(n):
-            if SEQ_LENGTH > 1:
-                seq = video[i * SEQ_LENGTH: (i + 1) * SEQ_LENGTH]
-                x = seq[:, :-1]
-                targets = seq[:, -1].astype(np.int8)
-                (values, counts) = np.unique(targets, return_counts=True)
-                y = values[np.argmax(counts)]
-            else:
-                x = video[i, :-1]
-                y = video[i, -1]
+    for i in range(n):
+        if SEQ_LENGTH > 1:
+            seq = video[i * SEQ_LENGTH: (i + 1) * SEQ_LENGTH]
 
-            X.append(x)
-            Y.append(y)
+            x = seq[:, :-1]
+
+            if FEAT_MODEL == "densenet121":
+                poses = []
+                for img_path in x:
+                    pose_path = os.path.join(POSE_DIR, os.path.splitext(img_path[0])[0] + ".npy")
+                    pose = np.load(pose_path)
+                    poses.append(pose)
+
+                x = np.stack(poses)
+
+            targets = seq[:, -1].astype(np.int8)
+            (values, counts) = np.unique(targets, return_counts=True)
+
+            y = values[np.argmax(counts)]
+        else:
+            x = video[i, :-1][0]
+            if FEAT_MODEL == "densenet121":
+                pose_path = os.path.join(POSE_DIR, os.path.splitext(x)[0] + ".npy")
+                x = np.load(pose_path)
+
+            y = video[i, -1]
+
+        X.append(x)
+        Y.append(y)
 
     return X, Y
 
@@ -234,8 +170,8 @@ def generate_split(df, cols, session_ids, child_ids):
                 X += x
                 Y += y
 
-    X = np.array(X)
-    Y = np.array(Y).astype(np.int8)
+    X = np.stack(X)
+    Y = np.stack(Y).astype(np.int8)
 
     return X, Y
 
@@ -244,12 +180,19 @@ def generateXY(data_path=CSV_FILE):
     print("Generating Data.")
     print("Split method:", SPLIT_METHOD)
     print("Sequence Length:", SEQ_LENGTH)
-    print("Model path/name:", MODEL_PATH)
+    print("Model path/name:", get_model_path(SPLIT_METHOD, SEQ_LENGTH, FEAT_MODEL, FEAT_NUM))
+
     df = pd.read_csv(data_path)
     child_ids = df.childID.unique()
     session_ids = df.sessionID.unique()
 
     cols = get_columns()
+
+    df = df[["childID", "sessionID"] + cols]
+
+    if FEAT_MODEL == "densenet121":
+        model = FeatExtractCNN().to(DEVICE)
+        model.eval()
 
     if os.path.exists(os.sep.join([VARS_DIR, "child_ids.npy"])):
         child_ids = np.load(os.sep.join([VARS_DIR, "child_ids.npy"]))
@@ -266,15 +209,15 @@ def generateXY(data_path=CSV_FILE):
     if SPLIT_METHOD == "SESSION":
         session_ids_tr = session_ids[:int(0.8 * len(session_ids))]
         X_tr, Y_tr = generate_split(df, cols, session_ids_tr, child_ids)
-        save_XY(X_tr, Y_tr, suffix="train")
+        save_XY(X_tr, Y_tr, split="train")
 
         session_ids_val = session_ids[int(0.8 * len(session_ids)):int(0.9 * len(session_ids))]
         X_val, Y_val = generate_split(df, cols, session_ids_val, child_ids)
-        save_XY(X_val, Y_val, suffix="val")
+        save_XY(X_val, Y_val, split="val")
 
         session_ids_test = session_ids[int(0.9 * len(session_ids)):]
         X_test, Y_test = generate_split(df, cols, session_ids_test, child_ids)
-        save_XY(X_test, Y_test, suffix="test")
+        save_XY(X_test, Y_test, split="test")
 
     elif SPLIT_METHOD == "CHILD":
         child_ids_tr = child_ids[:int(0.8 * len(child_ids))]
@@ -286,9 +229,9 @@ def generateXY(data_path=CSV_FILE):
         child_ids_test = child_ids[int(0.9 * len(child_ids)):]
         X_test, Y_test = generate_split(df, cols, session_ids, child_ids_test)
 
-        save_XY(X_tr, Y_tr, suffix="train")
-        save_XY(X_val, Y_val, suffix="val")
-        save_XY(X_test, Y_test, suffix="test")
+        save_XY(X_tr, Y_tr, split="train")
+        save_XY(X_val, Y_val, split="val")
+        save_XY(X_test, Y_test, split="test")
     else:  # RANDOM SPLIT
         X, Y = generate_split(df, cols, session_ids, child_ids)
         idxs = list(range(len(Y)))
@@ -299,13 +242,13 @@ def generateXY(data_path=CSV_FILE):
         X_val, Y_val = X[int(0.8 * len(Y)):int(0.9 * len(Y))], Y[int(0.8 * len(Y)):int(0.9 * len(Y))]
         X_test, Y_test = X[int(0.9 * len(Y)):], Y[int(0.9 * len(Y)):]
 
-        save_XY(X_tr, Y_tr, suffix="train")
-        save_XY(X_val, Y_val, suffix="val")
-        save_XY(X_test, Y_test, suffix="test")
+        save_XY(X_tr, Y_tr, split="train")
+        save_XY(X_val, Y_val, split="val")
+        save_XY(X_test, Y_test, split="test")
 
 
 def add_filenames(in_csv_file, out_csv_file):
-    df = pd.read_csv(os.sep.join([CSV_DIR, in_csv_file]))
+    df = pd.read_csv(os.sep.join([DATA_DIR, in_csv_file]))
 
     df.dropna(inplace=True)
     df.childID = df.childID.astype(np.int8)
@@ -347,11 +290,74 @@ def add_filenames(in_csv_file, out_csv_file):
         df["filename"] = filenames
 
     print(df.head())
-    df.to_csv(os.sep.join([CSV_DIR, out_csv_file]), index=None)
+    df.to_csv(os.sep.join([DATA_DIR, out_csv_file]), index=None)
+
+
+def generate_cnn_features(batch_size=CNN_BATCH_SIZE):
+    print("Generating CNN Features")
+    df = pd.read_csv(CSV_FILE)
+    filenames = df.filename.values
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    model = FeatExtractCNN().to(DEVICE)
+    model.eval()
+
+    batches = []
+    batch = []
+    for i, filename in enumerate(filenames):
+        img_path = os.path.join(IMAGES_DIR, filename)
+        pose_path = os.path.join(POSE_DIR, os.path.splitext(filename)[0] + ".npy")
+
+        if not os.path.exists(img_path) or os.path.exists(pose_path):
+            continue
+
+        pose_dir = os.path.split(pose_path)[0]
+        if not os.path.exists(pose_dir):
+            os.makedirs(pose_dir)
+
+        batch.append((img_path, pose_path))
+        if len(batch) == batch_size or i == len(filenames) - 1:
+            batches.append(batch)
+            batch = []
+
+    with torch.no_grad():
+        pp = ProgressPrinter(len(batches), 1)
+        for idx, batch in enumerate(batches):
+            if not batch: continue
+            X = []
+            for img_path, pose_path in batch:
+                X.append(preprocess(Image.open(img_path)))
+
+            X = torch.stack(X).to(DEVICE)
+            out = model(X).cpu().numpy()
+
+            for i, (img_path, pose_path) in enumerate(batch):
+                feat = out[i]
+                np.save(pose_path, feat)
+
+            pp.show(idx)
+
+        pp.end()
 
 
 if __name__ == "__main__":
     # add_filenames("28_with_filenames.csv", "28_with_filenames.csv")
+    # if FEAT_MODEL == "densenet121":
+    #     generate_cnn_features()
+
+    # for SPLIT_METHOD in ["SESSION", "RANDOM", "CHILD"]:
+    #     for SEQ_LENGTH in [1, 5, 25, 50, 100]:
+    #         try:
+    #             load_data()
+    #         except:
+    #             generateXY()
+    #
+    #         print()
+
+
     generateXY()
-    if use_CNN:
-        gen_CNN_feats()
+

@@ -6,11 +6,11 @@ from config import *
 
 
 class BiLSTM(nn.Module):
-    def __init__(self, hidden_size, nb_classes=NB_CLASS, num_layers=2):
+    def __init__(self, input_size, hidden_size, nb_classes=NB_CLASS, num_layers=2):
         super(BiLSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size=FEAT_NUM, hidden_size=hidden_size, num_layers=num_layers,
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
                             bidirectional=True, batch_first=True)
         self.out = nn.Linear(hidden_size * 2, nb_classes)
 
