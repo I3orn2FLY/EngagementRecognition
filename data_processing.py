@@ -183,6 +183,7 @@ def generateXY(data_path=CSV_FILE):
     print("Model path/name:", get_model_path(SPLIT_METHOD, SEQ_LENGTH, FEAT_MODEL, FEAT_NUM))
 
     df = pd.read_csv(data_path)
+    df.dropna(inplace=True)
     child_ids = df.childID.unique()
     session_ids = df.sessionID.unique()
 
